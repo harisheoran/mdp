@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"net/http"
 	"os"
 	"path"
@@ -23,7 +24,7 @@ func main() {
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		html := ParseFile(data)
-
+		io.WriteString(w, string(html))
 	})
 	http.ListenAndServe(":3000", nil)
 
