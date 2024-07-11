@@ -1,11 +1,9 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
-	"html/template"
-	"io"
-	"net/http"
 	"os"
 	"path"
 
@@ -13,55 +11,74 @@ import (
 	"github.com/russross/blackfriday/v2"
 )
 
+const (
+	header = `
+<!DOCTYPE html>
+
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Markdown Preview</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="description" content="" />
+  <link rel="icon" href="favicon.png">
+</head>
+<body>`
+
+	footer = `
+</body>
+</html>`
+)
+
 func main() {
 	fileFlag := flag.String("f", "", "Provide Markdown flag")
 	flag.Parse()
-	data, err := Readfile(*fileFlag)
-	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+
+	if *fileFlag == "" {
+		flag.Usage()
+	} else {
+		err := Readfile(*fileFlag)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 	}
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		html := ParseFile(data)
-		io.WriteString(w, string(html))
-	})
-	http.ListenAndServe(":3000", nil)
-
 }
 
-func Readfile(file string) ([]byte, error) {
+func Readfile(file string) error {
 	extension := path.Ext(file)
 	if extension != ".md" {
-		return nil, fmt.Errorf("Provide a markdown file.")
+		return fmt.Errorf("Provide a markdown file.")
 	}
 
 	_, errOpen := os.Open(file)
 	if errOpen != nil {
-		return nil, errOpen
+		return errOpen
 	}
 	data, errRead := os.ReadFile(file)
 	if errRead != nil {
-		return nil, errRead
+		return errRead
 	}
 
-	return data, nil
+	parsedData := ParseFile(data)
+	htmlFilename := fmt.Sprintf("%s.html", file)
+
+	return SaveHTML(parsedData, htmlFilename)
 }
 
 func ParseFile(markdown []byte) []byte {
 	output := blackfriday.Run(markdown)
 	santizedHTML := bluemonday.UGCPolicy().SanitizeBytes(output)
-	return santizedHTML
+
+	var buffer bytes.Buffer
+	buffer.WriteString(header)
+	buffer.Write(santizedHTML)
+	buffer.WriteString(footer)
+
+	return buffer.Bytes()
 }
 
-func Templating(markdownHTML []byte) {
-	var outputHTMLfilename = "output.html"
-	template, err := template.New(outputHTMLfilename).Parse(outputHTMLfilename)
-	if err != nil {
-		panic(err)
-	}
-	errEx := template.Execute(os.Stdout, markdownHTML)
-	if errEx != nil {
-		panic(errEx)
-	}
+func SaveHTML(data []byte, filename string) error {
+	return os.WriteFile(filename, []byte(data), 0644)
 }
