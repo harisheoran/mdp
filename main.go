@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path"
 
@@ -38,7 +39,7 @@ func main() {
 	if *fileFlag == "" {
 		flag.Usage()
 	} else {
-		err := Readfile(*fileFlag)
+		err := Readfile(*fileFlag, os.Stdout)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, err)
 			os.Exit(1)
@@ -46,7 +47,7 @@ func main() {
 	}
 }
 
-func Readfile(file string) error {
+func Readfile(file string, output io.Writer) error {
 	extension := path.Ext(file)
 	if extension != ".md" {
 		return fmt.Errorf("Provide a markdown file.")
@@ -62,9 +63,19 @@ func Readfile(file string) error {
 	}
 
 	parsedData := ParseFile(data)
-	htmlFilename := fmt.Sprintf("%s.html", file)
+	tempFile, err := os.CreateTemp("", "mdp*.html")
+	if err != nil {
+		return err
+	}
 
-	return SaveHTML(parsedData, htmlFilename)
+	errClose := tempFile.Close()
+	if errClose != nil {
+		return errClose
+	}
+
+	fmt.Fprintln(output, tempFile.Name())
+
+	return SaveHTML(parsedData, tempFile.Name())
 }
 
 func ParseFile(markdown []byte) []byte {
