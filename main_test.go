@@ -33,7 +33,7 @@ func Testparse(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	var mockStdOut bytes.Buffer
-	err := Readfile(inputfile, &mockStdOut)
+	err := Readfile(inputfile, &mockStdOut, true)
 	if err != nil {
 		t.Errorf("THIS %s", err.Error())
 	}
