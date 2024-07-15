@@ -17,8 +17,8 @@ func Testparse(t *testing.T) {
 	if err != nil {
 		t.Errorf(err.Error())
 	}
-
-	result := ParseFile(data)
+	tName := ""
+	result, _ := ParseFile(data, tName)
 
 	goldenFileData, err := os.ReadFile(goldenFile)
 	if err != nil {
@@ -33,7 +33,7 @@ func Testparse(t *testing.T) {
 
 func TestRead(t *testing.T) {
 	var mockStdOut bytes.Buffer
-	err := Readfile(inputfile, &mockStdOut, true)
+	err := Readfile(inputfile, &mockStdOut, true, "")
 	if err != nil {
 		t.Errorf("THIS %s", err.Error())
 	}

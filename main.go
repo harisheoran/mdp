@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"flag"
 	"fmt"
+	"html/template"
 	"io"
 	"os"
 	"os/exec"
@@ -16,28 +17,28 @@ import (
 )
 
 const (
-	header = `
-<!DOCTYPE html>
-
-<html lang="en">
-
-<head>
-  <meta charset="UTF-8" />
-  <title>Markdown Preview</title>
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <meta name="description" content="" />
-  <link rel="icon" href="favicon.png">
-</head>
-<body>`
-
-	footer = `
-</body>
-</html>`
+	defaultTemplate = `<!DOCTYPE html>​
+​ 	​<html>​
+​ 	​  <head>​
+​ 	​    <meta http-equiv="content-type" content="text/html; charset=utf-8">​
+​ 	​    <title>{{ .Title }}</title>​
+​ 	​  </head>​
+​ 	​  <body>​
+​ 	​{{ .Body }}​
+​ 	​  </body>​
+​ 	​</html>
+`
 )
+
+type content struct {
+	Title string
+	Body  template.HTML
+}
 
 func main() {
 	fileFlag := flag.String("f", "", "Provide Markdown flag")
 	skipFlag := flag.Bool("s", false, "Skip the preview")
+	tempFile := flag.String("t", "", "Provide HTML template file")
 	flag.Parse()
 
 	if *fileFlag == "" {
@@ -45,7 +46,7 @@ func main() {
 		os.Exit(1)
 	}
 
-	err := Readfile(*fileFlag, os.Stdout, *skipFlag)
+	err := Readfile(*fileFlag, os.Stdout, *skipFlag, *tempFile)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
@@ -53,7 +54,7 @@ func main() {
 
 }
 
-func Readfile(file string, output io.Writer, skipPreview bool) error {
+func Readfile(file string, output io.Writer, skipPreview bool, tName string) error {
 	extension := path.Ext(file)
 	if extension != ".md" {
 		return fmt.Errorf("Provide a markdown file.")
@@ -68,7 +69,10 @@ func Readfile(file string, output io.Writer, skipPreview bool) error {
 		return errRead
 	}
 
-	parsedData := ParseFile(data)
+	parsedData, errParse := ParseFile(data, tName)
+	if errParse != nil {
+		return errParse
+	}
 	tempFile, err := os.CreateTemp("", "mdp*.html")
 	if err != nil {
 		return err
@@ -94,16 +98,35 @@ func Readfile(file string, output io.Writer, skipPreview bool) error {
 	return Preview(tempFile.Name())
 }
 
-func ParseFile(markdown []byte) []byte {
+func ParseFile(markdown []byte, tName string) ([]byte, error) {
 	output := blackfriday.Run(markdown)
 	santizedHTML := bluemonday.UGCPolicy().SanitizeBytes(output)
 
-	var buffer bytes.Buffer
-	buffer.WriteString(header)
-	buffer.Write(santizedHTML)
-	buffer.WriteString(footer)
+	t, err := template.New("mdp").Parse(defaultTemplate)
+	if err != nil {
+		return nil, err
+	}
 
-	return buffer.Bytes()
+	if tName != "" {
+		t, err = template.ParseFiles(tName)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	content := content{
+		Title: "Markdown Preview Tool",
+		Body:  template.HTML(santizedHTML),
+	}
+
+	var buffer bytes.Buffer
+	errExe := t.Execute(&buffer, content)
+	if errExe != nil {
+		return nil, errExe
+
+	}
+
+	return buffer.Bytes(), nil
 }
 
 func SaveHTML(data []byte, filename string) error {
